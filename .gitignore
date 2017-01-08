@@ -3,3 +3,6 @@ Packages
 xcuserdata
 *.xcodeproj
 Config/secrets
+
+*/.DS_Store
+.DS_Store
