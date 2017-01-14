@@ -20,6 +20,17 @@ final class UserController: BaseController {
         super.init(drop: drop)
     }
     
+    func handleSocket(request: Request, socket: WebSocket) throws -> Void {
+        
+        socket.onClose = { (ws: WebSocket, code: UInt16?, reason: String?, clean: Bool) -> Void in
+            
+        }
+        
+        socket.onText = { (ws: WebSocket, text: String) -> Void in
+            print(text)
+        }
+    }
+    
     // GET: - /
     func index(request: Request) throws -> ResponseRepresentable {
         return try User.all().makeNode().converted(to: JSON.self)
