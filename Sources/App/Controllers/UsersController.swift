@@ -1,68 +1,51 @@
 import Vapor
 import HTTP
 import Fluent
+import Routing
 
 final class UserController: BaseController {
     
-    override func addRoutes(drop: Droplet) {
-        let basic = drop.grouped("users")
-        basic.get(handler: self.index)
-        basic.post(handler: self.create)
-        basic.get(String.self, handler: self.show)
+    override class var resource: String {
+        return "users"
     }
     
-    override func addPreparations(drop: Droplet) {
-        drop.preparations += User.self
-        drop.preparations += Pivot<User, Book>.self
-    }
-    
-    override init(drop: Droplet) {
-        super.init(drop: drop)
-    }
-    
-    func handleSocket(request: Request, socket: WebSocket) throws -> Void {
-        
-        socket.onClose = { (ws: WebSocket, code: UInt16?, reason: String?, clean: Bool) -> Void in
-            
-        }
-        
-        socket.onText = { (ws: WebSocket, text: String) -> Void in
-            print(text)
-        }
+    override func addRoutes(routeGroup: Route) {
+        let group = routeGroup.grouped(type(of: self).resource).grouped(AuthMiddleware())
+        group.get(handler: self.index)
+        group.get(String.self, handler: self.show)
+        group.delete(String.self, handler: self.delete)
     }
     
     // GET: - /
     func index(request: Request) throws -> ResponseRepresentable {
-        return try User.all().makeNode().converted(to: JSON.self)
-    }
-
-    // POST: - /
-    func create(request: Request) throws -> ResponseRepresentable {
-        var post = try request.user()
-        try post.save()
-        return post
-    }
-
-    // GET: - /{user_id}
-    func show(request: Request, book: User) throws -> ResponseRepresentable {
-        throw JSONError.allowFragmentsNotSupported
+        return JSON(try User.all().makeNode())
     }
     
     // GET: - /{user_id}
     func show(request: Request, userId: String) throws -> ResponseRepresentable {
-        throw JSONError.allowFragmentsNotSupported
+        let users = try? User.all()
+        guard let userById = users?.filter({ $0.id?.string == userId }).first else {
+            throw Abort.custom(status: Status(statusCode: 404), message: "No such user")
+        }
+        guard let userNode = try? userById.makeJSON() else {
+            throw Abort.custom(status: Status(statusCode: 500), message: "User serialization failed")
+        }
+        return userNode
     }
     
     // DELETE: - /{user_id}
-    func delete(request: Request, user: User) throws -> ResponseRepresentable {
-        try user.delete()
+    func delete(request: Request, userId: String) throws -> ResponseRepresentable {
+        guard let user = try User.all().first(where: { (user: User) -> Bool in
+            return user.id?.string == userId
+        }) else { throw Abort.custom(status: Status(statusCode: 404), message: "No such user") }
+        do {
+            try user.credential()?.delete()
+            try user.purchases().all().forEach { try $0.delete() }
+            try user.delete()
+        } catch let error {
+            print(error)
+        }
         return JSON([:])
-    }
-
-    // DELETE: - /
-    func clear(request: Request) throws -> ResponseRepresentable {
-        try User.query().delete()
-        return JSON([])
     }
 
     // PATCH: - /{user_id}
@@ -75,7 +58,9 @@ final class UserController: BaseController {
     // PUT: - /{user_id}
     func replace(request: Request, user: User) throws -> ResponseRepresentable {
         try user.delete()
-        return try create(request: request)
+        var newUser = try request.user()
+        try newUser.save()
+        return newUser
     }
 }
 

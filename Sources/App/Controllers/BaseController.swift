@@ -1,18 +1,24 @@
 import Vapor
 import HTTP
 import Fluent
+import Routing
+import Foundation
 
-class BaseController {
+typealias Route = RouteGroup<Responder, Droplet>
 
-    func addRoutes(drop: Droplet) {
+class BaseController: ResourceHolding {
+    
+    class var resource: String { return "" }
+    
+    func addRoutes(routeGroup: Route) {
+        fatalError("Should be overriden")
     }
     
-    func addPreparations(drop: Droplet) {
+    init(routeGroup: Route) {
+        self.addRoutes(routeGroup: routeGroup)
     }
-    
-    init(drop: Droplet) {
-        self.addRoutes(drop: drop)
-        self.addPreparations(drop: drop)
-    }
-    
+}
+
+protocol ResourceHolding: class {
+    static var resource: String { get }
 }

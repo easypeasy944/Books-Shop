@@ -2,13 +2,17 @@ import Vapor
 import HTTP
 import Fluent
 import Foundation
+import Routing
+import HTTPRouting
 
 final class AuthController: BaseController {
-
-    override func addRoutes(drop: Droplet) {
-        let basic = drop.grouped("auth")
-        basic.post("signin", handler: self.signin)
-        basic.post("login", handler: self.login)
+    
+    override class var resource: String { return "auth" }
+    
+    override func addRoutes(routeGroup: Route) {
+        let group = routeGroup.grouped(type(of: self).resource)
+        group.post("signin", handler: self.signin)
+        group.post("login",  handler: self.login)
     }
     
     func signin(request: Request) throws -> ResponseRepresentable {
@@ -16,8 +20,15 @@ final class AuthController: BaseController {
         guard let password = request.data["password"]?.string else { throw Abort.badRequest }
         guard let login = request.data["login"]?.string else { throw Abort.badRequest }
         
-        guard let _ = try Credential.query().filter("password", password).filter("login", login).first() else { throw Abort.badRequest }
-        return try Token().makeResponse()
+        guard var credential = try Credential.query()
+                                             .filter("password", password)
+                                             .filter("login", login)
+                                             .first() else { throw Abort.badRequest }
+    
+        try Credential.renewToken(credential: &credential)
+        try credential.save()
+        
+        return credential
     }
     
     func login(request: Request) throws -> ResponseRepresentable {
@@ -27,23 +38,16 @@ final class AuthController: BaseController {
         
         let existingCredential = try Credential.query().filter("password", password).filter("login", login).first()
         
-        guard existingCredential == nil else { throw NSError(domain: "server", code: 100, userInfo: ["desc" : "some"]) }
+        guard existingCredential == nil else { throw Abort.badRequest }
         
         var credential = Credential(password: password, login: login)
         var user = User()
         
         try user.save()
         credential.userId = user.id
+        try Credential.renewToken(credential: &credential)
         try credential.save()
-        
-        return try Token().makeResponse()
-    }
-    
-    override func addPreparations(drop: Droplet) {
-        
-    }
-    
-    override init(drop: Droplet) {
-        super.init(drop: drop)
+
+        return credential
     }
 }

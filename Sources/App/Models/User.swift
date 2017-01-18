@@ -40,7 +40,13 @@ final class User: Model, Person {
     }
     
     func purchases() -> Children<Purchase> {
-        return self.children("purchases", Purchase.self)
+        return self.children("user_id", Purchase.self)
+    }
+    
+    func credential() throws -> Credential? {
+        return try Credential.all().first(where: { (credential) -> Bool in
+            return credential.userId == self.id
+        })
     }
 
     static func prepare(_ database: Database) throws {
